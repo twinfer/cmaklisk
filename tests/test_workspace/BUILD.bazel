@@ -1,0 +1,9 @@
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+cc_library(
+    name = "testlib",
+    srcs = ["lib.cc"],
+    hdrs = ["lib.h"],
+    deps = ["@abseil-cpp//absl/strings"],
+    visibility = ["//visibility:public"],
+)
