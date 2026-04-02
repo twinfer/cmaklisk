@@ -103,7 +103,7 @@ ${CMAKE_BINARY_DIR}/cel-cpp/
 ## Testing
 
 ```sh
-cmake --preset test -S tests
+cmake -B build-test -S tests
 cmake --build build-test
 ./build-test/test_consumer   # prints "Hello, cmaklisk!"
 ```

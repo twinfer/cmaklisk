@@ -39,10 +39,10 @@ def resolve_path(frag_id: int, frag_map: dict[int, dict], cache: dict[int, str])
 
 
 def parse_aquery(data: dict) -> tuple[list[str], list[str]]:
-    """Extract archive paths and include directories from aquery jsonproto.
+    """Extract link inputs (.a and .o) and include directories from aquery jsonproto.
 
     Returns:
-        (archive_paths, include_dirs)
+        (link_inputs, include_dirs) where link_inputs contains both .a and .o paths.
     """
     # Build lookup maps
     frag_map: dict[int, dict] = {}

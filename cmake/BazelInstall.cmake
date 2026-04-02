@@ -18,7 +18,7 @@
 
 cmake_minimum_required(VERSION 3.21)
 
-message(STATUS "BazelInstall: packaging ${LIB_NAME}...")
+message(STATUS "cmaklisk: packaging ${LIB_NAME}...")
 
 file(MAKE_DIRECTORY "${INSTALL_DIR}/lib")
 file(MAKE_DIRECTORY "${INSTALL_DIR}/include")
@@ -55,9 +55,9 @@ if(NOT _info_rc EQUAL 0)
     # Fallback to SRC_DIR
     set(_exec_root "${SRC_DIR}")
 endif()
-message(STATUS "BazelInstall: execution root: ${_exec_root}")
+message(STATUS "cmaklisk: execution root: ${_exec_root}")
 
-message(STATUS "BazelInstall: running aquery...")
+message(STATUS "cmaklisk: running aquery...")
 execute_process(
     COMMAND ${_aquery_cmd}
     WORKING_DIRECTORY "${SRC_DIR}"
@@ -67,7 +67,7 @@ execute_process(
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 if(NOT _aquery_rc EQUAL 0)
-    message(FATAL_ERROR "BazelInstall: bazel aquery failed (rc=${_aquery_rc}):\n${_aquery_err}")
+    message(FATAL_ERROR "cmaklisk: bazel aquery failed (rc=${_aquery_rc}):\n${_aquery_err}")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -79,7 +79,7 @@ set(_include_dirs_file "${INSTALL_DIR}/_include_dirs.txt")
 set(_used_python FALSE)
 
 if(PYTHON_EXECUTABLE AND AQUERY_PARSER AND EXISTS "${AQUERY_PARSER}")
-    message(STATUS "BazelInstall: parsing aquery with Python (fast path)")
+    message(STATUS "cmaklisk: parsing aquery with Python (fast path)")
     # Build exclude args
     set(_exclude_args "")
     if(EXCLUDE_PATTERNS)
@@ -102,20 +102,20 @@ if(PYTHON_EXECUTABLE AND AQUERY_PARSER AND EXISTS "${AQUERY_PARSER}")
     if(_py_rc EQUAL 0)
         set(_used_python TRUE)
     else()
-        message(WARNING "BazelInstall: Python parser failed, falling back to CMake:\n${_py_err}")
+        message(WARNING "cmaklisk: Python parser failed, falling back to CMake:\n${_py_err}")
     endif()
     file(REMOVE "${INSTALL_DIR}/_aquery_input.json")
 endif()
 
 if(NOT _used_python)
-    message(STATUS "BazelInstall: parsing aquery with CMake string(JSON) (flatten-and-prefix)")
+    message(STATUS "cmaklisk: parsing aquery with CMake string(JSON) (flatten-and-prefix)")
 
     # --- Build path fragment index: _FRAG_<id>_LABEL, _FRAG_<id>_PARENT ---
     string(JSON _frag_count LENGTH "${_aquery_json}" "pathFragments")
     if(NOT _frag_count)
         set(_frag_count 0)
     endif()
-    message(STATUS "BazelInstall: indexing ${_frag_count} path fragments...")
+    message(STATUS "cmaklisk: indexing ${_frag_count} path fragments...")
     math(EXPR _frag_last "${_frag_count} - 1")
     if(_frag_count GREATER 0)
         foreach(_i RANGE 0 ${_frag_last})
@@ -138,7 +138,7 @@ if(NOT _used_python)
     if(NOT _art_count)
         set(_art_count 0)
     endif()
-    message(STATUS "BazelInstall: resolving ${_art_count} artifact paths...")
+    message(STATUS "cmaklisk: resolving ${_art_count} artifact paths...")
     math(EXPR _art_last "${_art_count} - 1")
     if(_art_count GREATER 0)
         foreach(_i RANGE 0 ${_art_last})
@@ -166,7 +166,7 @@ if(NOT _used_python)
     if(NOT _action_count)
         set(_action_count 0)
     endif()
-    message(STATUS "BazelInstall: scanning ${_action_count} actions...")
+    message(STATUS "cmaklisk: scanning ${_action_count} actions...")
 
     # Collect both .a and .o — Bazel only materializes the direct target's .a,
     # transitive deps are available as .o files.
@@ -267,12 +267,11 @@ endforeach()
 list(LENGTH ALL_ARCHIVES ARCHIVE_COUNT)
 list(LENGTH ALL_OBJECTS OBJECT_COUNT)
 list(LENGTH ALL_INCLUDE_DIRS INCLUDE_DIR_COUNT)
-message(STATUS "BazelInstall: found ${ARCHIVE_COUNT} archives, ${OBJECT_COUNT} objects, ${INCLUDE_DIR_COUNT} include dirs")
+message(STATUS "cmaklisk: found ${ARCHIVE_COUNT} archives, ${OBJECT_COUNT} objects, ${INCLUDE_DIR_COUNT} include dirs")
 
-set(_total_inputs ${ARCHIVE_COUNT})
 math(EXPR _total_inputs "${ARCHIVE_COUNT} + ${OBJECT_COUNT}")
 if(_total_inputs EQUAL 0)
-    message(FATAL_ERROR "BazelInstall: no archives found. Check TARGETS and BAZEL_ARGS.")
+    message(FATAL_ERROR "cmaklisk: no archives found. Check TARGETS and BAZEL_ARGS.")
 endif()
 
 # ---------------------------------------------------------------------------
@@ -305,12 +304,12 @@ foreach(_f IN LISTS _abs_inputs)
     endif()
 endforeach()
 if(_missing_count GREATER 0)
-    message(WARNING "BazelInstall: ${_missing_count} files not found on disk (skipped)")
+    message(WARNING "cmaklisk: ${_missing_count} files not found on disk (skipped)")
 endif()
 set(_abs_inputs "${_valid_inputs}")
 
 list(LENGTH _abs_inputs _input_count)
-message(STATUS "BazelInstall: merging ${_input_count} files into lib${LIB_NAME}.a")
+message(STATUS "cmaklisk: merging ${_input_count} files into lib${LIB_NAME}.a")
 
 # Write filelist (one path per line) — works for both .a and .o
 file(WRITE "${_filelist}" "")
@@ -372,18 +371,18 @@ endif()
 file(REMOVE "${_filelist}")
 
 if(NOT _ar_rc EQUAL 0)
-    message(FATAL_ERROR "BazelInstall: archive merge failed (rc=${_ar_rc}):\n${_ar_err}")
+    message(FATAL_ERROR "cmaklisk: archive merge failed (rc=${_ar_rc}):\n${_ar_err}")
 endif()
 
 file(SIZE "${_fat_lib}" _lib_size)
 math(EXPR _lib_size_mb "${_lib_size} / 1048576")
-message(STATUS "BazelInstall: created lib${LIB_NAME}.a (${_lib_size_mb} MB)")
+message(STATUS "cmaklisk: created lib${LIB_NAME}.a (${_lib_size_mb} MB)")
 
 # ---------------------------------------------------------------------------
 # Step 5: Copy headers based on aquery-discovered include directories
 # ---------------------------------------------------------------------------
 
-message(STATUS "BazelInstall: copying headers from ${INCLUDE_DIR_COUNT} include dirs...")
+message(STATUS "cmaklisk: copying headers from ${INCLUDE_DIR_COUNT} include dirs...")
 
 # Find the Bazel external directory via convenience symlink, resolve to real path
 set(_bazel_external "")
@@ -396,7 +395,7 @@ foreach(_link IN LISTS _bazel_links)
     endif()
 endforeach()
 if(_bazel_external)
-    message(STATUS "BazelInstall: using Bazel external: ${_bazel_external}")
+    message(STATUS "cmaklisk: using Bazel external: ${_bazel_external}")
 endif()
 
 foreach(_inc_dir IN LISTS ALL_INCLUDE_DIRS)
@@ -489,4 +488,4 @@ endforeach()
 # Cleanup temp files
 file(REMOVE "${_archives_file}" "${_include_dirs_file}")
 
-message(STATUS "BazelInstall: ${LIB_NAME} install complete → ${INSTALL_DIR}")
+message(STATUS "cmaklisk: ${LIB_NAME} install complete → ${INSTALL_DIR}")

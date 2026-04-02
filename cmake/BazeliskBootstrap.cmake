@@ -10,11 +10,11 @@ include_guard(GLOBAL)
 
 set(_BAZELISK_VERSION "1.25.0")
 
-# Known SHA256 hashes for Bazelisk v1.25.0 binaries.
-set(_BAZELISK_HASH_darwin_arm64  "SHA256=c94e0383e0e0b6b498142882648e5ef03e tried2d6a28553a69e95330caa85a2e365")
-set(_BAZELISK_HASH_darwin_amd64  "SHA256=placeholder_darwin_amd64")
-set(_BAZELISK_HASH_linux_amd64   "SHA256=placeholder_linux_amd64")
-set(_BAZELISK_HASH_linux_arm64   "SHA256=placeholder_linux_arm64")
+# SHA256 hashes for Bazelisk v1.25.0 binaries.
+set(_BAZELISK_HASH_darwin_arm64  "SHA256=b13dd89c6ecd90944ca3539f5a2c715a18f69b7458878c471a902a8e482ceb4b")
+set(_BAZELISK_HASH_darwin_amd64  "SHA256=0af019eeb642fa70744419d02aa32df55e6e7a084105d49fb26801a660aa56d3")
+set(_BAZELISK_HASH_linux_amd64   "SHA256=fd8fdff418a1758887520fa42da7e6ae39aefc788cf5e7f7bb8db6934d279fc4")
+set(_BAZELISK_HASH_linux_arm64   "SHA256=4c8d966e40ac2c4efcc7f1a5a5cceef2c0a2f16b957e791fa7a867cce31e8fcb")
 
 function(_cmaklisk_ensure_bazel)
     # Already found?
@@ -71,24 +71,14 @@ function(_cmaklisk_ensure_bazel)
     if(NOT EXISTS "${_bazelisk_path}")
         file(MAKE_DIRECTORY "${_bazelisk_dir}")
 
-        # Download (hash verification is optional — remove EXPECTED_HASH if hashes aren't populated)
         set(_hash_var "_BAZELISK_HASH_${_os}_${_arch}")
         set(_expected_hash "${${_hash_var}}")
 
-        if(_expected_hash AND NOT _expected_hash MATCHES "placeholder")
-            file(DOWNLOAD "${_bazelisk_url}" "${_bazelisk_path}"
-                EXPECTED_HASH ${_expected_hash}
-                STATUS _dl_status
-                SHOW_PROGRESS
-            )
-        else()
-            # No hash available — download without verification
-            message(STATUS "cmaklisk: downloading without hash verification (update hashes for pinned builds)")
-            file(DOWNLOAD "${_bazelisk_url}" "${_bazelisk_path}"
-                STATUS _dl_status
-                SHOW_PROGRESS
-            )
-        endif()
+        file(DOWNLOAD "${_bazelisk_url}" "${_bazelisk_path}"
+            EXPECTED_HASH ${_expected_hash}
+            STATUS _dl_status
+            SHOW_PROGRESS
+        )
 
         list(GET _dl_status 0 _dl_rc)
         if(NOT _dl_rc EQUAL 0)
