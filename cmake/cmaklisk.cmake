@@ -22,6 +22,7 @@
 #       NAMESPACE    cel
 #       LINK_LIBRARIES "-framework CoreFoundation"
 #       EXCLUDE_ARTIFACTS "-exec-"
+#       TARGET_QUERY "kind(cc_proto_library, deps(//my:target))"
 #       EXT_ARGS     GIT_SHALLOW TRUE PATCH_COMMAND ...
 #   )
 #
@@ -45,7 +46,7 @@ function(cmaklisk)
         PARSE_ARGV 0 ARG
         ""                                                   # options
         "NAME;GIT_REPOSITORY;GIT_TAG;NAMESPACE"              # one-value
-        "TARGETS;BAZEL_ARGS;LINK_LIBRARIES;EXCLUDE_ARTIFACTS;EXT_ARGS" # multi-value
+        "TARGETS;BAZEL_ARGS;LINK_LIBRARIES;EXCLUDE_ARTIFACTS;TARGET_QUERY;EXT_ARGS" # multi-value
     )
 
     # --- Validate required args ---
@@ -83,6 +84,7 @@ function(cmaklisk)
     string(REPLACE ";" "${_LIST_SEP}" _targets_safe "${ARG_TARGETS}")
     string(REPLACE ";" "${_LIST_SEP}" _bazel_args_safe "${ARG_BAZEL_ARGS}")
     string(REPLACE ";" "${_LIST_SEP}" _exclude_safe "${ARG_EXCLUDE_ARTIFACTS}")
+    string(REPLACE ";" "${_LIST_SEP}" _query_safe "${ARG_TARGET_QUERY}")
 
     set(_install_cmd
         "${CMAKE_COMMAND}"
@@ -93,6 +95,7 @@ function(cmaklisk)
         "-DBAZEL_ARGS=${_bazel_args_safe}"
         "-DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}"
         "-DEXCLUDE_PATTERNS=${_exclude_safe}"
+        "-DTARGET_QUERY=${_query_safe}"
         "-DLIB_NAME=${ARG_NAME}"
         "-DLIST_SEP=${_LIST_SEP}"
     )

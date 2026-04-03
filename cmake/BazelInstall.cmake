@@ -15,6 +15,7 @@
 #   AQUERY_PARSER     - path to BazelAqueryParse.py (optional)
 #   PYTHON_EXECUTABLE - path to python3 (optional)
 #   LIB_NAME          - output library name (e.g., "cel-cpp" → libcel-cpp.a)
+#   TARGET_QUERY      - Bazel query expressions to discover extra targets (semicolon-separated)
 #   LIST_SEP          - placeholder used to escape semicolons through ExternalProject
 
 cmake_minimum_required(VERSION 3.21)
@@ -24,6 +25,7 @@ if(LIST_SEP)
     string(REPLACE "${LIST_SEP}" ";" TARGET_EXPR "${TARGET_EXPR}")
     string(REPLACE "${LIST_SEP}" ";" BAZEL_ARGS "${BAZEL_ARGS}")
     string(REPLACE "${LIST_SEP}" ";" EXCLUDE_PATTERNS "${EXCLUDE_PATTERNS}")
+    string(REPLACE "${LIST_SEP}" ";" TARGET_QUERY "${TARGET_QUERY}")
 endif()
 
 message(STATUS "cmaklisk: packaging ${LIB_NAME}...")
@@ -32,47 +34,58 @@ file(MAKE_DIRECTORY "${INSTALL_DIR}/lib")
 file(MAKE_DIRECTORY "${INSTALL_DIR}/include")
 
 # ---------------------------------------------------------------------------
-# Step 1: Run bazel aquery to discover artifacts
+# Step 1: Resolve TARGET_QUERY expressions and build discovered targets
+# ---------------------------------------------------------------------------
+
+if(TARGET_QUERY)
+    foreach(_query IN LISTS TARGET_QUERY)
+        message(STATUS "cmaklisk: resolving query: ${_query}")
+        execute_process(
+            COMMAND "${BAZEL_EXECUTABLE}" query
+                --noshow_progress --curses=no
+                "${_query}" --output=label
+            WORKING_DIRECTORY "${SRC_DIR}"
+            OUTPUT_VARIABLE _query_labels
+            ERROR_VARIABLE _query_err
+            RESULT_VARIABLE _query_rc
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        if(_query_rc EQUAL 0 AND _query_labels)
+            # Convert newline-separated labels to a CMake list
+            string(REPLACE "\n" ";" _label_list "${_query_labels}")
+            list(LENGTH _label_list _label_count)
+            message(STATUS "cmaklisk: query resolved ${_label_count} targets")
+
+            # Build them to materialize archives
+            set(_build_cmd "${BAZEL_EXECUTABLE}" build --noshow_progress --curses=no)
+            if(BAZEL_ARGS)
+                list(APPEND _build_cmd ${BAZEL_ARGS})
+            endif()
+            list(APPEND _build_cmd ${_label_list})
+            execute_process(
+                COMMAND ${_build_cmd}
+                WORKING_DIRECTORY "${SRC_DIR}"
+                RESULT_VARIABLE _build_rc
+                ERROR_VARIABLE _build_err
+            )
+            if(NOT _build_rc EQUAL 0)
+                message(WARNING "cmaklisk: query target build failed (rc=${_build_rc})")
+            endif()
+
+            # Add to TARGET_EXPR so aquery includes them
+            list(APPEND TARGET_EXPR ${_label_list})
+        else()
+            message(WARNING "cmaklisk: query failed (rc=${_query_rc}): ${_query_err}")
+        endif()
+    endforeach()
+endif()
+
+# ---------------------------------------------------------------------------
+# Step 2: Run bazel aquery to discover artifacts
 # ---------------------------------------------------------------------------
 
 # Build the target union expression for aquery: //a + //b + //c
 list(JOIN TARGET_EXPR " + " _aquery_targets)
-set(_deps_expr "deps(${_aquery_targets})")
-
-# Build all transitive deps to ensure intermediate archives (e.g. cc_proto_library)
-# are materialized on disk before we collect them.
-set(_deps_file "${INSTALL_DIR}/_deps_labels.txt")
-message(STATUS "cmaklisk: querying transitive deps...")
-set(_cquery_cmd "${BAZEL_EXECUTABLE}" cquery --noshow_progress --curses=no)
-if(BAZEL_ARGS)
-    list(APPEND _cquery_cmd ${BAZEL_ARGS})
-endif()
-list(APPEND _cquery_cmd "${_deps_expr}" --output=label)
-execute_process(
-    COMMAND ${_cquery_cmd}
-    WORKING_DIRECTORY "${SRC_DIR}"
-    OUTPUT_FILE "${_deps_file}"
-    ERROR_VARIABLE _cq_err
-    RESULT_VARIABLE _cq_rc
-)
-if(_cq_rc EQUAL 0)
-    message(STATUS "cmaklisk: building all transitive deps...")
-    set(_deps_build_cmd "${BAZEL_EXECUTABLE}" build --noshow_progress --curses=no
-        "--target_pattern_file=${_deps_file}")
-    if(BAZEL_ARGS)
-        list(APPEND _deps_build_cmd ${BAZEL_ARGS})
-    endif()
-    execute_process(
-        COMMAND ${_deps_build_cmd}
-        WORKING_DIRECTORY "${SRC_DIR}"
-        RESULT_VARIABLE _deps_rc
-        ERROR_VARIABLE _deps_err
-    )
-    if(NOT _deps_rc EQUAL 0)
-        message(WARNING "cmaklisk: deps build returned ${_deps_rc} (non-fatal)")
-    endif()
-endif()
-file(REMOVE "${_deps_file}")
 
 set(_aquery_cmd
     "${BAZEL_EXECUTABLE}" aquery
@@ -116,7 +129,7 @@ if(NOT _aquery_rc EQUAL 0)
 endif()
 
 # ---------------------------------------------------------------------------
-# Step 2: Parse aquery JSON — try Python first, fall back to pure CMake
+# Step 3: Parse aquery JSON — try Python first, fall back to pure CMake
 # ---------------------------------------------------------------------------
 
 set(_archives_file "${INSTALL_DIR}/_archives.txt")
@@ -300,7 +313,7 @@ if(NOT _used_python)
 endif()
 
 # ---------------------------------------------------------------------------
-# Step 3: Read parsed results
+# Step 4: Read parsed results
 # ---------------------------------------------------------------------------
 
 file(STRINGS "${_archives_file}" ALL_LINK_INPUTS)
@@ -328,7 +341,7 @@ if(_total_inputs EQUAL 0)
 endif()
 
 # ---------------------------------------------------------------------------
-# Step 4: Merge .a archives and .o objects into a single fat static library
+# Step 5: Merge .a archives and .o objects into a single fat static library
 # ---------------------------------------------------------------------------
 
 set(_fat_lib "${INSTALL_DIR}/lib/lib${LIB_NAME}.a")
@@ -432,7 +445,7 @@ math(EXPR _lib_size_mb "${_lib_size} / 1048576")
 message(STATUS "cmaklisk: created lib${LIB_NAME}.a (${_lib_size_mb} MB)")
 
 # ---------------------------------------------------------------------------
-# Step 5: Copy headers based on aquery-discovered include directories
+# Step 6: Copy headers based on aquery-discovered include directories
 # ---------------------------------------------------------------------------
 
 message(STATUS "cmaklisk: copying headers from ${INCLUDE_DIR_COUNT} include dirs...")
