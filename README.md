@@ -10,7 +10,7 @@ Auto-downloads [Bazelisk](https://github.com/bazelbuild/bazelisk) if Bazel isn't
 
 ```cmake
 # Download cmaklisk
-CPMAddPackage("gh:khalid/cmaklisk@0.1.0")
+CPMAddPackage("gh:twinfer/cmaklisk@0.1.0")
 include(${cmaklisk_SOURCE_DIR}/cmake/cmaklisk.cmake)
 
 # Import a Bazel library
@@ -31,7 +31,7 @@ target_link_libraries(my_app PRIVATE cel::cel)
 
 ```cmake
 include(FetchContent)
-FetchContent_Declare(cmaklisk GIT_REPOSITORY https://github.com/khalid/cmaklisk.git GIT_TAG v0.1.0)
+FetchContent_Declare(cmaklisk GIT_REPOSITORY https://github.com/twinfer/cmaklisk.git GIT_TAG v0.1.0)
 FetchContent_MakeAvailable(cmaklisk)
 include(${cmaklisk_SOURCE_DIR}/cmake/cmaklisk.cmake)
 ```
