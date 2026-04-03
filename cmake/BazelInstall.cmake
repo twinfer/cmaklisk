@@ -53,24 +53,9 @@ if(TARGET_QUERY)
         if(_query_rc EQUAL 0 AND _query_labels)
             # Convert newline-separated labels to a CMake list
             string(REPLACE "\n" ";" _label_list "${_query_labels}")
+            list(FILTER _label_list EXCLUDE REGEX "^$")
             list(LENGTH _label_list _label_count)
             message(STATUS "cmaklisk: query resolved ${_label_count} targets")
-
-            # Build them to materialize archives
-            set(_build_cmd "${BAZEL_EXECUTABLE}" build --noshow_progress --curses=no)
-            if(BAZEL_ARGS)
-                list(APPEND _build_cmd ${BAZEL_ARGS})
-            endif()
-            list(APPEND _build_cmd ${_label_list})
-            execute_process(
-                COMMAND ${_build_cmd}
-                WORKING_DIRECTORY "${SRC_DIR}"
-                RESULT_VARIABLE _build_rc
-                ERROR_VARIABLE _build_err
-            )
-            if(NOT _build_rc EQUAL 0)
-                message(WARNING "cmaklisk: query target build failed (rc=${_build_rc})")
-            endif()
 
             # Add to TARGET_EXPR so aquery includes them
             list(APPEND TARGET_EXPR ${_label_list})
@@ -80,11 +65,31 @@ if(TARGET_QUERY)
     endforeach()
 endif()
 
+# Build all targets (original + query-resolved) in one shot so Bazel keeps
+# all external dependencies available for the header copy step.
+message(STATUS "cmaklisk: building all targets...")
+set(_full_build_cmd "${BAZEL_EXECUTABLE}" build --noshow_progress --curses=no)
+if(BAZEL_ARGS)
+    list(APPEND _full_build_cmd ${BAZEL_ARGS})
+endif()
+list(APPEND _full_build_cmd ${TARGET_EXPR})
+execute_process(
+    COMMAND ${_full_build_cmd}
+    WORKING_DIRECTORY "${SRC_DIR}"
+    RESULT_VARIABLE _build_rc
+    ERROR_VARIABLE _build_err
+)
+if(NOT _build_rc EQUAL 0)
+    message(WARNING "cmaklisk: combined build failed (rc=${_build_rc})")
+endif()
+
 # ---------------------------------------------------------------------------
 # Step 2: Run bazel aquery to discover artifacts
 # ---------------------------------------------------------------------------
 
 # Build the target union expression for aquery: //a + //b + //c
+list(REMOVE_DUPLICATES TARGET_EXPR)
+list(FILTER TARGET_EXPR EXCLUDE REGEX "^$")
 list(JOIN TARGET_EXPR " + " _aquery_targets)
 
 set(_aquery_cmd
@@ -97,7 +102,7 @@ set(_aquery_cmd
 if(BAZEL_ARGS)
     list(APPEND _aquery_cmd ${BAZEL_ARGS})
 endif()
-list(APPEND _aquery_cmd "${_deps_expr}")
+list(APPEND _aquery_cmd "deps(${_aquery_targets})")
 
 # Get the Bazel execution root for resolving artifact paths
 execute_process(
