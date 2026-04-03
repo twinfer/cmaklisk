@@ -10,7 +10,7 @@ Auto-downloads [Bazelisk](https://github.com/bazelbuild/bazelisk) if Bazel isn't
 
 ```cmake
 # Download cmaklisk
-CPMAddPackage("gh:twinfer/cmaklisk@0.1.0")
+CPMAddPackage("gh:twinfer/cmaklisk@0.1.2")
 include(${cmaklisk_SOURCE_DIR}/cmake/cmaklisk.cmake)
 
 # Import a Bazel library
@@ -19,7 +19,9 @@ cmaklisk(
     GIT_REPOSITORY https://github.com/google/cel-cpp.git
     GIT_TAG      0fc37152
     TARGETS      //eval/public:cel_expression //parser:parser
-    BAZEL_ARGS   --compilation_mode=opt
+                 //compiler:compiler_factory //runtime:standard_runtime_builder_factory
+    TARGET_QUERY "kind(cc_proto_library, deps(//eval/public:cel_expression))"
+    BAZEL_ARGS   --compilation_mode=opt --macos_minimum_os=11
     NAMESPACE    cel
     LINK_LIBRARIES "$<$<PLATFORM_ID:Darwin>:-framework CoreFoundation>"
 )
@@ -31,7 +33,7 @@ target_link_libraries(my_app PRIVATE cel::cel)
 
 ```cmake
 include(FetchContent)
-FetchContent_Declare(cmaklisk GIT_REPOSITORY https://github.com/twinfer/cmaklisk.git GIT_TAG v0.1.0)
+FetchContent_Declare(cmaklisk GIT_REPOSITORY https://github.com/twinfer/cmaklisk.git GIT_TAG v0.1.2)
 FetchContent_MakeAvailable(cmaklisk)
 include(${cmaklisk_SOURCE_DIR}/cmake/cmaklisk.cmake)
 ```
@@ -48,7 +50,19 @@ cmaklisk(
     NAMESPACE <ns>                 # Optional. Target namespace (default: NAME).
     LINK_LIBRARIES <lib>...        # Optional. Extra link libraries for the target.
     EXCLUDE_ARTIFACTS <regex>...   # Optional. Patterns to exclude from archive merge.
+    TARGET_QUERY <expr>...         # Optional. Bazel query expressions to discover extra targets.
     EXT_ARGS <arg>...              # Optional. Extra args passed to ExternalProject_Add.
+)
+```
+
+`TARGET_QUERY` runs [Bazel query](https://bazel.build/query/guide) expressions at build time to discover additional targets. The resolved targets are built and included in the fat library alongside `TARGETS`. This is useful for pulling in `cc_proto_library` or other generated targets without listing them individually:
+
+```cmake
+cmaklisk(
+    NAME cel-cpp
+    ...
+    TARGETS //eval/public:cel_expression //parser:parser
+    TARGET_QUERY "kind(cc_proto_library, deps(//eval/public:cel_expression))"
 )
 ```
 
