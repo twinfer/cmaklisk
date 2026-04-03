@@ -37,6 +37,42 @@ file(MAKE_DIRECTORY "${INSTALL_DIR}/include")
 
 # Build the target union expression for aquery: //a + //b + //c
 list(JOIN TARGET_EXPR " + " _aquery_targets)
+set(_deps_expr "deps(${_aquery_targets})")
+
+# Build all transitive deps to ensure intermediate archives (e.g. cc_proto_library)
+# are materialized on disk before we collect them.
+set(_deps_file "${INSTALL_DIR}/_deps_labels.txt")
+message(STATUS "cmaklisk: querying transitive deps...")
+set(_cquery_cmd "${BAZEL_EXECUTABLE}" cquery --noshow_progress --curses=no)
+if(BAZEL_ARGS)
+    list(APPEND _cquery_cmd ${BAZEL_ARGS})
+endif()
+list(APPEND _cquery_cmd "${_deps_expr}" --output=label)
+execute_process(
+    COMMAND ${_cquery_cmd}
+    WORKING_DIRECTORY "${SRC_DIR}"
+    OUTPUT_FILE "${_deps_file}"
+    ERROR_VARIABLE _cq_err
+    RESULT_VARIABLE _cq_rc
+)
+if(_cq_rc EQUAL 0)
+    message(STATUS "cmaklisk: building all transitive deps...")
+    set(_deps_build_cmd "${BAZEL_EXECUTABLE}" build --noshow_progress --curses=no
+        "--target_pattern_file=${_deps_file}")
+    if(BAZEL_ARGS)
+        list(APPEND _deps_build_cmd ${BAZEL_ARGS})
+    endif()
+    execute_process(
+        COMMAND ${_deps_build_cmd}
+        WORKING_DIRECTORY "${SRC_DIR}"
+        RESULT_VARIABLE _deps_rc
+        ERROR_VARIABLE _deps_err
+    )
+    if(NOT _deps_rc EQUAL 0)
+        message(WARNING "cmaklisk: deps build returned ${_deps_rc} (non-fatal)")
+    endif()
+endif()
+file(REMOVE "${_deps_file}")
 
 set(_aquery_cmd
     "${BAZEL_EXECUTABLE}" aquery
@@ -48,7 +84,7 @@ set(_aquery_cmd
 if(BAZEL_ARGS)
     list(APPEND _aquery_cmd ${BAZEL_ARGS})
 endif()
-list(APPEND _aquery_cmd "deps(${_aquery_targets})")
+list(APPEND _aquery_cmd "${_deps_expr}")
 
 # Get the Bazel execution root for resolving artifact paths
 execute_process(
