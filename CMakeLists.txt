@@ -6,7 +6,7 @@ project(cmaklisk VERSION 0.1.0 LANGUAGES NONE)
 # Consumption methods:
 #
 #   1. CPM / FetchContent:
-#      CPMAddPackage("gh:khalid/cmaklisk@0.1.0")
+#      CPMAddPackage("gh:twinfer/cmaklisk@0.1.0")
 #      include(${cmaklisk_SOURCE_DIR}/cmake/cmaklisk.cmake)
 #
 #   2. Installed:
@@ -31,7 +31,7 @@ install(CODE "
     )
 ")
 
-if(BUILD_TESTING)
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR AND BUILD_TESTING)
     enable_testing()
     add_subdirectory(tests)
 endif()
