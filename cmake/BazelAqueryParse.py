@@ -77,14 +77,17 @@ def parse_aquery(data: dict) -> tuple[list[str], list[str]]:
             i = 0
             while i < len(args):
                 arg = args[i]
-                if arg in ("-I", "-iquote") and i + 1 < len(args):
+                if arg in ("-I", "-iquote", "-isystem") and i + 1 < len(args):
                     include_dirs.add(args[i + 1])
                     i += 2
-                elif arg.startswith("-I") and len(arg) > 2:
+                elif arg.startswith("-I") and not arg.startswith("-isystem") and len(arg) > 2:
                     include_dirs.add(arg[2:])
                     i += 1
                 elif arg.startswith("-iquote") and len(arg) > 7:
                     include_dirs.add(arg[7:])
+                    i += 1
+                elif arg.startswith("-isystem") and len(arg) > 8:
+                    include_dirs.add(arg[8:])
                     i += 1
                 else:
                     i += 1
