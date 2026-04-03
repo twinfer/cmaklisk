@@ -15,8 +15,16 @@
 #   AQUERY_PARSER     - path to BazelAqueryParse.py (optional)
 #   PYTHON_EXECUTABLE - path to python3 (optional)
 #   LIB_NAME          - output library name (e.g., "cel-cpp" → libcel-cpp.a)
+#   LIST_SEP          - placeholder used to escape semicolons through ExternalProject
 
 cmake_minimum_required(VERSION 3.21)
+
+# Restore semicolons from escaped list values (ExternalProject splits on ;)
+if(LIST_SEP)
+    string(REPLACE "${LIST_SEP}" ";" TARGET_EXPR "${TARGET_EXPR}")
+    string(REPLACE "${LIST_SEP}" ";" BAZEL_ARGS "${BAZEL_ARGS}")
+    string(REPLACE "${LIST_SEP}" ";" EXCLUDE_PATTERNS "${EXCLUDE_PATTERNS}")
+endif()
 
 message(STATUS "cmaklisk: packaging ${LIB_NAME}...")
 
@@ -57,14 +65,15 @@ if(NOT _info_rc EQUAL 0)
 endif()
 message(STATUS "cmaklisk: execution root: ${_exec_root}")
 
+set(_aquery_json_file "${INSTALL_DIR}/_aquery_input.json")
+
 message(STATUS "cmaklisk: running aquery...")
 execute_process(
     COMMAND ${_aquery_cmd}
     WORKING_DIRECTORY "${SRC_DIR}"
-    OUTPUT_VARIABLE _aquery_json
+    OUTPUT_FILE "${_aquery_json_file}"
     ERROR_VARIABLE _aquery_err
     RESULT_VARIABLE _aquery_rc
-    OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 if(NOT _aquery_rc EQUAL 0)
     message(FATAL_ERROR "cmaklisk: bazel aquery failed (rc=${_aquery_rc}):\n${_aquery_err}")
@@ -88,10 +97,9 @@ if(PYTHON_EXECUTABLE AND AQUERY_PARSER AND EXISTS "${AQUERY_PARSER}")
         endforeach()
     endif()
 
-    file(WRITE "${INSTALL_DIR}/_aquery_input.json" "${_aquery_json}")
     execute_process(
         COMMAND "${PYTHON_EXECUTABLE}" "${AQUERY_PARSER}"
-            --input "${INSTALL_DIR}/_aquery_input.json"
+            --input "${_aquery_json_file}"
             --archives "${_archives_file}"
             --include-dirs "${_include_dirs_file}"
             --src-dir "${SRC_DIR}"
@@ -104,11 +112,12 @@ if(PYTHON_EXECUTABLE AND AQUERY_PARSER AND EXISTS "${AQUERY_PARSER}")
     else()
         message(WARNING "cmaklisk: Python parser failed, falling back to CMake:\n${_py_err}")
     endif()
-    file(REMOVE "${INSTALL_DIR}/_aquery_input.json")
 endif()
 
 if(NOT _used_python)
     message(STATUS "cmaklisk: parsing aquery with CMake string(JSON) (flatten-and-prefix)")
+
+    file(READ "${_aquery_json_file}" _aquery_json)
 
     # --- Build path fragment index: _FRAG_<id>_LABEL, _FRAG_<id>_PARENT ---
     string(JSON _frag_count LENGTH "${_aquery_json}" "pathFragments")
@@ -464,7 +473,7 @@ foreach(_inc_dir IN LISTS ALL_INCLUDE_DIRS)
         # Virtual includes/imports from bazel-bin
         set(_vi_path "${SRC_DIR}/${_inc_dir}")
         if(EXISTS "${_vi_path}")
-            file(GLOB_RECURSE _vi_headers "${_vi_path}/*.h")
+            file(GLOB_RECURSE _vi_headers "${_vi_path}/*.h" "${_vi_path}/*.inc")
             foreach(_h IN LISTS _vi_headers)
                 # The path after _virtual_includes/<target>/ is the real include path
                 string(REGEX MATCH "_virtual_(includes|imports)/[^/]+/(.*)" _match "${_h}")
@@ -494,6 +503,6 @@ foreach(_inc_dir IN LISTS ALL_INCLUDE_DIRS)
 endforeach()
 
 # Cleanup temp files
-file(REMOVE "${_archives_file}" "${_include_dirs_file}")
+file(REMOVE "${_archives_file}" "${_include_dirs_file}" "${_aquery_json_file}")
 
 message(STATUS "cmaklisk: ${LIB_NAME} install complete → ${INSTALL_DIR}")

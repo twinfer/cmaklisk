@@ -74,20 +74,27 @@ function(cmaklisk)
 
     # --- Build the INSTALL_COMMAND ---
     # Pass all context to BazelInstall.cmake via -D variables.
-    # Semicolon-separated lists are passed as-is (CMake handles this in -P mode).
+    # CMake lists (semicolons) in -D values get misinterpreted by ExternalProject's
+    # stamp file as list separators. Escape with a placeholder, restore in install script.
     set(_install_script "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/BazelInstall.cmake")
     set(_aquery_parser "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/BazelAqueryParse.py")
+
+    set(_LIST_SEP "<<>>")
+    string(REPLACE ";" "${_LIST_SEP}" _targets_safe "${ARG_TARGETS}")
+    string(REPLACE ";" "${_LIST_SEP}" _bazel_args_safe "${ARG_BAZEL_ARGS}")
+    string(REPLACE ";" "${_LIST_SEP}" _exclude_safe "${ARG_EXCLUDE_ARTIFACTS}")
 
     set(_install_cmd
         "${CMAKE_COMMAND}"
         "-DBAZEL_EXECUTABLE=${BAZEL_EXECUTABLE}"
         "-DSRC_DIR=${_src_dir}"
         "-DINSTALL_DIR=${_install_dir}"
-        "-DTARGET_EXPR=${ARG_TARGETS}"
-        "-DBAZEL_ARGS=${ARG_BAZEL_ARGS}"
+        "-DTARGET_EXPR=${_targets_safe}"
+        "-DBAZEL_ARGS=${_bazel_args_safe}"
         "-DCMAKE_SYSTEM_NAME=${CMAKE_SYSTEM_NAME}"
-        "-DEXCLUDE_PATTERNS=${ARG_EXCLUDE_ARTIFACTS}"
+        "-DEXCLUDE_PATTERNS=${_exclude_safe}"
         "-DLIB_NAME=${ARG_NAME}"
+        "-DLIST_SEP=${_LIST_SEP}"
     )
 
     # Pass Python and parser script if available
