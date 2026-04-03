@@ -151,12 +151,15 @@ if(PYTHON_EXECUTABLE AND AQUERY_PARSER AND EXISTS "${AQUERY_PARSER}")
         endforeach()
     endif()
 
+    set(_compile_commands_file "${INSTALL_DIR}/compile_commands.json")
     execute_process(
         COMMAND "${PYTHON_EXECUTABLE}" "${AQUERY_PARSER}"
             --input "${_aquery_json_file}"
             --archives "${_archives_file}"
             --include-dirs "${_include_dirs_file}"
             --src-dir "${SRC_DIR}"
+            --compile-commands "${_compile_commands_file}"
+            --exec-root "${_exec_root}"
             ${_exclude_args}
         RESULT_VARIABLE _py_rc
         ERROR_VARIABLE _py_err

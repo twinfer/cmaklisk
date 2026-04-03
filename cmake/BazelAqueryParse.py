@@ -16,6 +16,7 @@ Usage:
 
 import argparse
 import json
+import os
 import re
 import sys
 
@@ -95,6 +96,47 @@ def parse_aquery(data: dict) -> tuple[list[str], list[str]]:
     return sorted(set(link_inputs)), sorted(include_dirs)
 
 
+def generate_compile_commands(data: dict, exec_root: str, exclude_patterns: list[re.Pattern]) -> list[dict]:
+    """Generate compile_commands.json entries from CppCompile actions."""
+    entries = []
+
+    for action in data.get("actions", []):
+        mnemonic = action.get("mnemonic", "")
+        if mnemonic not in ("CppCompile", "ObjcCompile"):
+            continue
+
+        args = action.get("arguments", [])
+        if not args:
+            continue
+
+        # Find the source file: last argument that looks like a source file
+        source_file = ""
+        for a in reversed(args):
+            if a.endswith((".cc", ".cpp", ".c", ".cxx", ".m", ".mm")):
+                source_file = a
+                break
+
+        if not source_file:
+            continue
+
+        # Skip exec-config actions (build tools, not target code)
+        command = " ".join(args)
+        if any(p.search(command) for p in exclude_patterns):
+            continue
+
+        # Resolve source path
+        if not os.path.isabs(source_file):
+            source_file = os.path.join(exec_root, source_file)
+
+        entries.append({
+            "directory": exec_root,
+            "command": command,
+            "file": source_file,
+        })
+
+    return entries
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Parse bazel aquery jsonproto output")
     parser.add_argument("--input", required=True, help="Path to aquery JSON file")
@@ -102,6 +144,8 @@ def main() -> None:
     parser.add_argument("--include-dirs", required=True, help="Output file for include directories")
     parser.add_argument("--src-dir", default=".", help="Bazel workspace root (for path context)")
     parser.add_argument("--exclude", action="append", default=[], help="Regex patterns to exclude")
+    parser.add_argument("--compile-commands", default="", help="Output compile_commands.json path")
+    parser.add_argument("--exec-root", default="", help="Bazel execution root for compile_commands")
     args = parser.parse_args()
 
     with open(args.input) as f:
@@ -110,8 +154,8 @@ def main() -> None:
     link_inputs, include_dirs = parse_aquery(data)
 
     # Apply exclusion filters
-    for pattern in args.exclude:
-        regex = re.compile(pattern)
+    exclude_regexes = [re.compile(p) for p in args.exclude]
+    for regex in exclude_regexes:
         link_inputs = [p for p in link_inputs if not regex.search(p)]
 
     with open(args.archives, "w") as f:
@@ -119,6 +163,13 @@ def main() -> None:
 
     with open(args.include_dirs, "w") as f:
         f.write("\n".join(include_dirs))
+
+    # Generate compile_commands.json
+    if args.compile_commands and args.exec_root:
+        entries = generate_compile_commands(data, args.exec_root, exclude_regexes)
+        with open(args.compile_commands, "w") as f:
+            json.dump(entries, f, indent=2)
+        print(f"BazelAqueryParse: wrote {len(entries)} compile commands", file=sys.stderr)
 
     archives = [p for p in link_inputs if p.endswith(".a")]
     objects = [p for p in link_inputs if p.endswith(".o")]

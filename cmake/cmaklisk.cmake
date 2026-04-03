@@ -150,5 +150,28 @@ function(cmaklisk)
 
     add_dependencies(${_target_name} ${ARG_NAME}_ext)
 
+    # --- Merge Bazel compile_commands.json into CMake's ---
+    if(CMAKE_EXPORT_COMPILE_COMMANDS AND _CMAKLISK_PYTHON)
+        set(_bazel_cc "${_install_dir}/compile_commands.json")
+        set(_cmake_cc "${CMAKE_BINARY_DIR}/compile_commands.json")
+        ExternalProject_Add_Step(${ARG_NAME}_ext merge_compile_commands
+            DEPENDEES install
+            COMMAND "${_CMAKLISK_PYTHON}" -c "
+import json, os, sys
+bazel_cc = sys.argv[1]
+cmake_cc = sys.argv[2]
+if not os.path.exists(bazel_cc):
+    sys.exit(0)
+entries = json.load(open(cmake_cc)) if os.path.exists(cmake_cc) else []
+bazel = json.load(open(bazel_cc))
+existing = {e.get('file','') for e in entries}
+merged = entries + [e for e in bazel if e.get('file','') not in existing]
+json.dump(merged, open(cmake_cc, 'w'), indent=2)
+print(f'cmaklisk: merged {len(bazel)} Bazel compile commands into {cmake_cc}')
+" "${_bazel_cc}" "${_cmake_cc}"
+            LOG TRUE
+        )
+    endif()
+
     message(STATUS "cmaklisk: configured ${_target_name} from ${ARG_GIT_REPOSITORY} @ ${ARG_GIT_TAG}")
 endfunction()
