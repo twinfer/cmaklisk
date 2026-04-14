@@ -559,6 +559,50 @@ foreach(_inc_dir IN LISTS ALL_INCLUDE_DIRS)
     endif()
 endforeach()
 
+# ---------------------------------------------------------------------------
+# Step 7: Materialize symlinks so the install tree is self-contained
+# ---------------------------------------------------------------------------
+#
+# file(COPY) preserves file-level symlinks inside recursive copies. Many of
+# Bazel's external/ headers are symlinks into the Bazel output cache
+# (e.g. /private/var/tmp/_bazel_<user>/...). When that cache is cleaned —
+# by `bazel clean`, a disk-space cleaner, or macOS's periodic temp cleanup —
+# every install-dir symlink breaks and subsequent compiles fail with
+# confusing "file not found" errors on headers that appear to exist.
+#
+# Walk the install tree once and replace any symlinks with concrete copies
+# of their content. cmake -E copy reads and writes bytes, so it dereferences.
+
+file(GLOB_RECURSE _installed "${INSTALL_DIR}/include/*")
+set(_materialized 0)
+set(_broken 0)
+foreach(_f IN LISTS _installed)
+    if(NOT IS_SYMLINK "${_f}")
+        continue()
+    endif()
+    file(REAL_PATH "${_f}" _real)
+    if(NOT EXISTS "${_real}" OR IS_DIRECTORY "${_real}")
+        math(EXPR _broken "${_broken} + 1")
+        continue()
+    endif()
+    file(REMOVE "${_f}")
+    execute_process(
+        COMMAND "${CMAKE_COMMAND}" -E copy "${_real}" "${_f}"
+        RESULT_VARIABLE _cp_rc
+    )
+    if(_cp_rc EQUAL 0)
+        math(EXPR _materialized "${_materialized} + 1")
+    else()
+        math(EXPR _broken "${_broken} + 1")
+    endif()
+endforeach()
+if(_materialized GREATER 0)
+    message(STATUS "cmaklisk: materialized ${_materialized} header symlinks")
+endif()
+if(_broken GREATER 0)
+    message(WARNING "cmaklisk: ${_broken} broken/unresolvable symlinks encountered in install tree")
+endif()
+
 # Cleanup temp files
 file(REMOVE "${_archives_file}" "${_include_dirs_file}" "${_aquery_json_file}")
 
